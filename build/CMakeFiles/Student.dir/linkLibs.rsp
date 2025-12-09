@@ -1,0 +1,1 @@
+  -LC:/Users/YUMIKA/Desktop/CPP/student/sqlite/bin  -LC:/Users/YUMIKA/Desktop/CPP/student/lib  -lSQLite3Cpp_lib -lsqlite3_lib -lkernel32 -luser32 -lgdi32 -lwinspool -lshell32 -lole32 -loleaut32 -luuid -lcomdlg32 -ladvapi32 

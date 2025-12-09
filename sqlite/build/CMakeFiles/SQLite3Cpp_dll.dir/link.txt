@@ -1,0 +1,3 @@
+C:\msys64\mingw64\bin\cmake.exe -E rm -f CMakeFiles\SQLite3Cpp_dll.dir/objects.a
+C:\msys64\mingw64\bin\ar.exe qc CMakeFiles\SQLite3Cpp_dll.dir/objects.a @CMakeFiles\SQLite3Cpp_dll.dir\objects1.rsp
+C:\msys64\mingw64\bin\c++.exe -shared -o C:\Users\YUMIKA\Desktop\CPP\student\sqlite\bin\libSQLite3Cpp_dll.dll -Wl,--out-implib,C:\Users\YUMIKA\Desktop\CPP\student\sqlite\bin\libSQLite3Cpp_dll.dll.a -Wl,--major-image-version,0,--minor-image-version,0 -Wl,--whole-archive CMakeFiles\SQLite3Cpp_dll.dir/objects.a -Wl,--no-whole-archive @CMakeFiles\SQLite3Cpp_dll.dir\linkLibs.rsp

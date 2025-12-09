@@ -1,0 +1,4 @@
+C:/Users/YUMIKA/Desktop/CPP/student/sqlite/build/CMakeFiles/SQLite3Cpp_lib.dir
+C:/Users/YUMIKA/Desktop/CPP/student/sqlite/build/CMakeFiles/SQLite3Cpp_dll.dir
+C:/Users/YUMIKA/Desktop/CPP/student/sqlite/build/CMakeFiles/edit_cache.dir
+C:/Users/YUMIKA/Desktop/CPP/student/sqlite/build/CMakeFiles/rebuild_cache.dir

@@ -1,0 +1,3 @@
+C:/Users/YUMIKA/Desktop/CPP/student/build/CMakeFiles/Student.dir
+C:/Users/YUMIKA/Desktop/CPP/student/build/CMakeFiles/edit_cache.dir
+C:/Users/YUMIKA/Desktop/CPP/student/build/CMakeFiles/rebuild_cache.dir

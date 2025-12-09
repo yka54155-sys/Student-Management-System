@@ -1,0 +1,2 @@
+C:\msys64\mingw64\bin\ar.exe qc C:\Users\YUMIKA\Desktop\CPP\student\sqlite\bin\libSQLite3Cpp_lib.a CMakeFiles/SQLite3Cpp_lib.dir/src/sqlite3cpp.cpp.obj
+C:\msys64\mingw64\bin\ranlib.exe C:\Users\YUMIKA\Desktop\CPP\student\sqlite\bin\libSQLite3Cpp_lib.a

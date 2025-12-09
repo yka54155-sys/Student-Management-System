@@ -1,0 +1,70 @@
+{
+	"configurations" : 
+	[
+		{
+			"abstractTargets" : [],
+			"directories" : 
+			[
+				{
+					"build" : ".",
+					"jsonFile" : "directory-.-f6f22219c74102c3da70.json",
+					"minimumCMakeVersion" : 
+					{
+						"string" : "4.0"
+					},
+					"projectIndex" : 0,
+					"source" : ".",
+					"targetIndexes" : 
+					[
+						0,
+						1
+					]
+				}
+			],
+			"name" : "",
+			"projects" : 
+			[
+				{
+					"directoryIndexes" : 
+					[
+						0
+					],
+					"name" : "SQLite3Cpp",
+					"targetIndexes" : 
+					[
+						0,
+						1
+					]
+				}
+			],
+			"targets" : 
+			[
+				{
+					"directoryIndex" : 0,
+					"id" : "SQLite3Cpp_dll::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-SQLite3Cpp_dll-322d63c8a69260c3aa6e.json",
+					"name" : "SQLite3Cpp_dll",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "SQLite3Cpp_lib::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-SQLite3Cpp_lib-1d8cedcef03e082c2d77.json",
+					"name" : "SQLite3Cpp_lib",
+					"projectIndex" : 0
+				}
+			]
+		}
+	],
+	"kind" : "codemodel",
+	"paths" : 
+	{
+		"build" : "C:/Users/YUMIKA/Desktop/CPP/student/sqlite/build",
+		"source" : "C:/Users/YUMIKA/Desktop/CPP/student/sqlite"
+	},
+	"version" : 
+	{
+		"major" : 2,
+		"minor" : 9
+	}
+}

@@ -1,0 +1,367 @@
+ SQL注入防护原理深度讲解
+
+  1. SQL注入的本质原理
+
+  1.1 SQL注入是如何发生的？
+
+   1 // 正常情况
+   2 std::string name = "张三";
+   3 std::string sql = "SELECT * FROM users WHERE name = '" + name + "'";
+   4 // 结果：SELECT * FROM users WHERE name = '张三'
+   5 
+   6 // SQL注入情况
+   7 std::string name = "张三'; DROP TABLE users; --";
+   8 std::string sql = "SELECT * FROM users WHERE name = '" + name + "'";
+   9 // 结果：SELECT * FROM users WHERE name = '张三'; DROP TABLE users; --'
+
+  核心问题： 字符串拼接破坏了SQL语法结构
+
+  1.2 数据库如何解析SQL
+
+   1 -- 数据库看到的是这样的SQL
+   2 SELECT * FROM users WHERE name = '张三'; DROP TABLE users; --'
+   3
+   4 -- 数据库解析过程：
+   5 -- 1. 第一句：SELECT * FROM users WHERE name = '张三'
+   6 -- 2. 第二句：DROP TABLE users  ← 这里是注入的恶意代码
+   7 -- 3. 第三句：--' (注释，后面的内容被忽略)
+
+  关键原理： 数据库按分号执行多条SQL语句，单引号闭合字符串，--注释后续内容
+
+  2. 参数化查询的防护原理
+
+  2.1 参数化查询的工作机制
+
+   1 // 参数化查询
+   2 std::string sql = "SELECT * FROM users WHERE name = ?";
+   3 std::string param = "张三'; DROP TABLE users; --";
+   4
+   5 // SQLite处理过程：
+   6 // 1. 编译SQL模板（此时不包含参数值）
+   7 // 2. 绑定参数（参数值作为数据，不是SQL代码）
+   8 // 3. 执行查询
+
+  2.2 深入理解SQLite的预处理语句
+
+    1 // 步骤1：SQL编译阶段
+    2 sqlite3_stmt* stmt;
+    3 const char* sql = "SELECT * FROM users WHERE name = ?";
+    4 int rc = sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr);
+    5
+    6 // 此时SQLite做了什么：
+    7 // - 解析SQL语法
+    8 // - 生成执行计划
+    9 // - 标记参数位置（?号位置）
+   10 // - 不会执行任何SQL代码
+   11
+   12 // 步骤2：参数绑定阶段
+   13 std::string malicious_input = "张三'; DROP TABLE users; --";
+   14 sqlite3_bind_text(stmt, 1, malicious_input.c_str(), -1, SQLITE_TRANSIENT);
+   15
+   16 // SQLite如何处理：
+   17 // - 将参数值作为纯数据处理
+   18 // - 不会解析参数中的SQL语法
+   19 // - 参数值被视为字符串字面量
+   20
+   21 // 步骤3：执行阶段
+   22 while ((rc = sqlite3_step(stmt)) == SQLITE_ROW) {
+   23     // 处理结果
+   24 }
+
+  2.3 参数绑定的底层原理
+
+    1 // SQLite内部的参数处理
+    2 struct sqlite3_stmt {
+    3     // SQL执行计划
+    4     void* pProgram;
+    5
+    6     // 参数信息
+    7     struct Param {
+    8         int index;           // 参数位置
+    9         int type;            // 参数类型
+   10         union {
+   11             char* text;      // 文本值
+   12             int integer;     // 整数值
+   13             double real;     // 浮点数值
+   14             // 其他类型...
+   15         } value;
+   16     }* params;
+   17     int param_count;
+   18 };
+   19
+   20 // 绑定过程
+   21 int sqlite3_bind_text(sqlite3_stmt* stmt, int index, const char* value, int len, void(*destructor)(void*)) {
+   22     // 1. 找到参数位置
+   23     Param* param = &stmt->params[index - 1];
+   24
+   25     // 2. 设置参数类型和值
+   26     param->type = SQLITE_TEXT;
+   27     param->value.text = copy_string(value, len);  // 复制字符串，不是解析SQL
+   28
+   29     // 3. 标记参数已绑定
+   30     param->is_bound = 1;
+   31
+   32     return SQLITE_OK;
+   33 }
+
+  3. 输入验证的防护原理
+
+  3.1 黑名单过滤原理
+
+    1 bool validate_input(const std::string& input) {
+    2     // 检查危险字符
+    3     std::vector<std::string> dangerous_chars = {"'", "\"", ";", "--"};
+    4
+    5     for (const auto& danger : dangerous_chars) {
+    6         if (input.find(danger) != std::string::npos) {
+    7             return false;  // 发现危险字符，拒绝
+    8         }
+    9     }
+   10     return true;
+   11 }
+   12
+   13 // 原理：在数据到达数据库之前就拦截危险内容
+
+  黑名单的问题：
+   1 // 绕过黑名单的例子
+   2 std::string input1 = "'; DROP TABLE users; --";     // 直接包含危险字符
+   3 std::string input2 = "'; DR/**/OP TABLE users; --"; // 使用注释绕过
+   4 std::string input3 = "'; DRO%50 TABLE users; --";   // 使用URL编码绕过
+
+  3.2 白名单验证原理
+
+   1 bool is_valid_username(const std::string& username) {
+   2     // 白名单：只允许字母、数字、下划线
+   3     std::regex pattern("^[a-zA-Z0-9_]{3,20}$");
+   4     return std::regex_match(username, pattern);
+   5 }
+   6
+   7 // 原理：只允许已知安全的字符，拒绝其他一切
+
+  白名单的优势：
+   - 更安全，不会漏掉新的攻击方式
+   - 明确定义了有效输入的范围
+   - 容易测试和维护
+
+  4. 字符编码和转义的原理
+
+  4.1 字符转义机制
+
+    1 std::string escape_sql_string(const std::string& input) {
+    2     std::string result;
+    3     for (char c : input) {
+    4         switch (c) {
+    5             case '\'':  result += "''"; break;    // 单引号变双单引号
+    6             case '\"':  result += "\\\""; break;   // 双引号转义
+    7             case '\\':  result += "\\\\"; break;   // 反斜杠转义
+    8             case '\0':  result += "\\0"; break;    // 空字符转义
+    9             case '\n':  result += "\\n"; break;    // 换行转义
+   10             case '\r':  result += "\\r"; break;    // 回车转义
+   11             default:    result += c; break;        // 其他字符保持不变
+   12         }
+   13     }
+   14     return result;
+   15 }
+   16
+   17 // 转义原理：将特殊字符转换为安全的表示形式
+
+  4.2 转义的问题
+
+   1 // 转义可能出错的情况
+   2 std::string input = "张三\\'; DROP TABLE users; --";
+   3 std::string escaped = escape_sql_string(input);
+   4 // 结果：张三\\\\'; DROP TABLE users; --
+   5 // 如果转义逻辑有漏洞，仍然可能被绕过
+
+  5. 类型安全的防护原理
+
+  5.1 强类型检查
+
+    1 template<typename T>
+    2 class SafeParameter {
+    3 public:
+    4     SafeParameter(T value) : value_(value) {
+    5         static_assert(is_valid_type<T>::value, "不支持的参数类型");
+    6     }
+    7
+    8     T get_value() const { return value_; }
+    9
+   10 private:
+   11     T value_;
+   12 };
+   13
+   14 // 使用
+   15 SafeParameter<int> id(123);        // 安全，整数类型
+   16 SafeParameter<std::string> name("张三"); // 安全，字符串类型
+   17 // SafeParameter<std::string> malicious("'; DROP TABLE users; --");
+   18 // 即使是恶意字符串，在参数化查询中也是安全的
+
+  5.2 编译时防护
+
+    1 // 编译时类型检查
+    2 template<typename T>
+    3 struct is_valid_type {
+    4     static constexpr bool value =
+    5         std::is_same_v<T, int> ||
+    6         std::is_same_v<T, double> ||
+    7         std::is_same_v<T, std::string>;
+    8 };
+    9
+   10 // 如果传入不支持的类型，编译失败
+   11 template<typename T>
+   12 void bind_parameter(sqlite3_stmt* stmt, int index, T value) {
+   13     static_assert(is_valid_type<T>::value, "不支持的参数类型");
+   14
+   15     if constexpr (std::is_same_v<T, int>) {
+   16         sqlite3_bind_int(stmt, index, value);
+   17     } else if constexpr (std::is_same_v<T, std::string>) {
+   18         sqlite3_bind_text(stmt, index, value.c_str(), -1, SQLITE_TRANSIENT);
+   19     }
+   20     // ...
+   21 }
+
+  6. 权限控制的防护原理
+
+  6.1 最小权限原则
+
+    1 class DatabaseUser {
+    2 public:
+    3     // 只读用户，只能执行SELECT
+    4     class ReadOnlyUser {
+    5         std::vector<std::vector<std::string>> query(const std::string& sql,
+    6                                                    const std::vector<std::string>& params) {
+    7             if (!is_select_query(sql)) {
+    8                 throw std::runtime_error("只读用户不能执行修改操作");
+    9             }
+   10             return db.query(sql, params);
+   11         }
+   12     private:
+   13         bool is_select_query(const std::string& sql) {
+   14             return sql.substr(0, 6) == "SELECT";
+   15         }
+   16     };
+   17
+   18     // 写入用户，可以执行INSERT、UPDATE、DELETE
+   19     class WriteUser {
+   20         bool execute(const std::string& sql, const std::vector<std::string>& params) {
+   21             if (is_dangerous_query(sql)) {
+   22                 throw std::runtime_error("不允许执行危险操作");
+   23             }
+   24             return db.execute(sql, params);
+   25         }
+   26     private:
+   27         bool is_dangerous_query(const std::string& sql) {
+   28             std::vector<std::string> dangerous = {"DROP", "TRUNCATE", "ALTER"};
+   29             std::string upper_sql = sql;
+   30             std::transform(upper_sql.begin(), upper_sql.end(), upper_sql.begin(), ::toupper);
+   31
+   32             for (const auto& danger : dangerous) {
+   33                 if (upper_sql.find(danger) != std::string::npos) {
+   34                     return true;
+   35                 }
+   36             }
+   37             return false;
+   38         }
+   39     };
+   40 };
+
+  7. 防护层次的综合原理
+
+  7.1 纵深防御策略
+
+    1 class MultiLayerProtection {
+    2 public:
+    3     bool execute_query(const std::string& sql, const std::vector<std::string>& params) {
+    4         // 第1层：输入验证
+    5         if (!validate_inputs(params)) {
+    6             log_security_event("输入验证失败");
+    7             return false;
+    8         }
+    9
+   10         // 第2层：SQL白名单检查
+   11         if (!is_whitelisted_query(sql)) {
+   12             log_security_event("SQL不在白名单中");
+   13             return false;
+   14         }
+   15
+   16         // 第3层：权限检查
+   17         if (!has_permission(sql)) {
+   18             log_security_event("权限不足");
+   19             return false;
+   20         }
+   21
+   22         // 第4层：参数化查询
+   23         if (!execute_with_params(sql, params)) {
+   24             log_security_event("执行失败");
+   25             return false;
+   26         }
+   27
+   28         // 第5层：结果验证
+   29         if (!validate_results()) {
+   30             log_security_event("结果异常");
+   31             return false;
+   32         }
+   33
+   34         return true;
+   35     }
+   36 };
+
+  7.2 防护流程图
+
+    1 用户输入
+    2     ↓
+    3 [第1层] 输入验证 ──→ 拒绝危险输入
+    4     ↓
+    5 [第2层] SQL白名单 ──→ 拒绝未知SQL
+    6     ↓
+    7 [第3层] 权限检查 ──→ 拒绝无权限操作
+    8     ↓
+    9 [第4层] 参数化查询 ──→ 安全执行
+   10     ↓
+   11 [第5层] 结果验证 ──→ 检查异常结果
+   12     ↓
+   13 返回结果
+
+  8. 实际攻击案例分析
+
+  8.1 经典SQL注入攻击
+
+    1 // 攻击者输入
+    2 std::string username = "admin' OR '1'='1";
+    3 std::string password = "anything";
+    4
+    5 // 不安全的拼接
+    6 std::string sql = "SELECT * FROM users WHERE username = '" + username +
+    7                  "' AND password = '" + password + "'";
+    8 // 结果：SELECT * FROM users WHERE username = 'admin' OR '1'='1' AND password = 'anything'
+    9 // 实际执行的逻辑：WHERE (username = 'admin') OR ('1'='1' AND password = 'anything')
+   10 // 由于 '1'='1' 永远为真，绕过密码验证
+   11
+   12 // 安全的参数化查询
+   13 std::string sql = "SELECT * FROM users WHERE username = ? AND password = ?";
+   14 db.execute(sql, {username, password});
+   15 // 结果：username = 'admin' OR '1'='1' 作为字符串查找，不会产生逻辑变化
+
+  8.2 盲注攻击
+
+   1 // 盲注：通过时间延迟推断信息
+   2 std::string input = "admin' AND (SELECT COUNT(*) FROM users) > 10 AND SLEEP(5) --";
+   3
+   4 // 不安全的情况：执行时间明显变长，说明用户数大于10
+   5 // 安全的情况：参数化查询，整个字符串作为用户名查找，不会执行子查询
+
+  9. 总结：防护原理的核心
+
+  根本原理：
+   1. 分离数据和代码：参数化查询确保用户输入永远不被当作SQL代码执行
+   2. 多层验证：在数据到达数据库前进行多层检查
+   3. 最小权限：即使被攻击，损失也最小
+   4. 持续监控：记录和检测异常行为
+
+  技术实现：
+   - sqlite3_prepare_v2：编译时不包含参数值
+   - sqlite3_bind_*：参数值作为纯数据绑定
+   - 输入验证：在应用层过滤危险内容
+   - 权限控制：限制可执行的SQL类型
+
+✦ 这就是SQL注入防护的完整原理
