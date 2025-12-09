@@ -4,7 +4,6 @@
 #include"Menu.hpp"
 #include"Student_callback.hpp"
 
-//github1
 
 int main()
 {
